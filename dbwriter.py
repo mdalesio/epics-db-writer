@@ -1,32 +1,34 @@
 import argparse
 import csv
 import logging
+from collections import defaultdict
 
-# TODO: Check that fields are valid for record types, count and indicate row #'s
 # TODO: Check CSV encoding - read appropriately
+# TODO: Error checking additions
 
-
-def duplicates_found(recname_list):
+def duplicates_found(value_list):
     """
-    Checks for duplicates within a list, and returns the list of duplicates.
+    Checks for duplicates within a list, then returns the list of duplicates and their row numbers.
     
     params
     ----------------
-    recname_list : list
-        List of all record names from RECNAME column (with RECTYP and not IGNORE)
+    value_list : list
+        List of tuples (value, row#) - (e.g. all record names from RECNAME column 
+            (with RECTYP and not IGNORE))
         
     returns
     ----------------
-    duplicates : set
-        Set of RECNAME values that have duplicates
+    duplicates : list
+        List of value-row# pairs that have duplicates
     """   
-    duplicates = []
-    seen = set()
-    for name in recname_list:
-        if name in seen:
-            duplicates.append(name)
-        seen.add(name)
-    return set(duplicates)
+
+    value_counts = defaultdict(int)
+    for val, _ in value_list:
+        value_counts[val] +=1
+
+    duplicates = [val for val, count in value_counts.items() if count > 1]
+
+    return duplicates
 
 
 def input_error(input_path):
@@ -34,8 +36,17 @@ def input_error(input_path):
     Checks the input filepath for the stats on ignored line and the following errors:
     1. File does not end with .csv - break
     2. Does not contains headers: RECNAME and RECTYPE - break
-    3. Rows missing RECNAME or RECTYPE
+    3. Rows missing RECNAME or RECTYPE - skipped
+    Warnings...
     4. Duplicate RECNAME instances
+
+    TO IMPLEMENT
+    5. Mismatch datatype to parameters
+        a. Type AI/O with OSV, ZSV, ONAM, ZNAM
+        b. Type BI/O with EGU, PREC, ADEL, DRVL, DRVH, LOPR, HOPR, HIHI, LOW, LOLO, HHSV, HSV, LSV, LLSV, HYST
+    6. Description longer than 40 characters
+    7. Records with HIHI, HIGH, LOW, LOLO set with no severity
+    8. Check PLC tag names for duplicates
     
     params
     ----------------
@@ -54,7 +65,7 @@ def input_error(input_path):
         "missing_type": {"msg": "Missing RECTYPE", "rows": []},
         "missing_name": {"msg": "Missing RECNAME", "rows": []},
         "field": {"msg": "Invalid Field Assignment", "rows": []},
-        "name": {"msg": "Duplicate Record Names", "rows": []},
+        "recname": {"msg": "Duplicate Record Names", "rows": []},
         "ignored": {"msg": "Rows ignored", "rows": []},
     }
 
@@ -104,12 +115,22 @@ def input_error(input_path):
                 logging.debug(".........missing RECTYPE")
                 err_log["missing_type"]["rows"].append(row_num)
             else:
-                recnames.append(recname)
+                recnames.append((recname, row_num))
             row_num += 1
 
         # Check record names for duplicates
         logging.debug("...duplicate RECNAME instances")
-        err_log["name"]["rows"] = duplicates_found(recnames)
+        err_log["recname"]["rows"] = duplicates_found(recnames)
+
+        # Mismatch datatype to parameters check
+        # Type AI/O with OSV, ZSV, ONAM, ZNAM
+        # Type BI/O with EGU, PREC, ADEL, DRVL, DRVH, LOPR, HOPR, HIHI, LOW, LOLO, HHSV, HSV, LSV, LLSV, HYST
+
+        # Description longer than 40 characters
+
+        # Records with HIHI, HIGH, LOW, LOLO set with no severity
+
+        # Check PLC tag names for duplicates
 
         # Iterate over err_log dictionary, print any with len(row)>0 && error true
         err_return = False
